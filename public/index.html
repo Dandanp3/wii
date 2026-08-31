@@ -3,87 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>My Wii Remote - Fase 5</title>
+    <title>My Wii Remote - Fase 7 (Experimental 6-DOF)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #1a1a1a;
+            background-color: #121212;
             color: #ffffff;
             margin: 0;
-            padding: 20px;
+            padding: 15px;
             display: flex;
             flex-direction: column;
             align-items: center;
             user-select: none;
         }
-        h1 { font-size: 1.4rem; margin-bottom: 10px; color: #00d2ff; }
-        .card {
-            background: #2a2a2a;
-            border-radius: 12px;
-            padding: 15px;
+        h1 { font-size: 1.2rem; margin-bottom: 8px; color: #00d2ff; }
+
+        #screenArea {
+            position: relative;
             width: 100%;
-            max-width: 350px;
-            margin-bottom: 15px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            max-width: 640px;
+            height: 340px;
+            background: #000000;
+            border: 2px solid #00d2ff;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 12px;
+            box-shadow: 0 0 15px rgba(0,210,255,0.2);
         }
+
+        #virtualCursor {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background-color: rgba(255, 0, 85, 0.9);
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 0 10px #ff0055;
+            display: none;
+            transition: left 0.03s linear, top 0.03s linear;
+        }
+
+        .card {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 10px 14px;
+            width: 100%;
+            max-width: 640px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            max-width: 640px;
+            margin-bottom: 8px;
+        }
+
         .btn {
             background: #00d2ff;
             color: #000;
             border: none;
-            padding: 15px;
-            font-size: 1rem;
+            padding: 12px;
+            font-size: 0.95rem;
             font-weight: bold;
-            border-radius: 8px;
-            width: 100%;
+            border-radius: 6px;
+            flex: 1;
             cursor: pointer;
-            margin-bottom: 10px;
         }
-        .btn-calib { background: #ffaa00; margin-top: 5px; }
-        .btn:active { opacity: 0.8; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        .pad-btn {
-            background: #444; color: white; border: none; padding: 15px;
-            font-size: 1.1rem; border-radius: 6px; touch-action: manipulation;
+        .btn-calib { background: #ff0055; color: white; }
+        .btn-drift { background: #ffaa00; color: black; }
+        .btn-mode { background: #333; color: white; border: 1px solid #555; }
+        .btn-mode.active { background: #00ff66; color: black; font-weight: bold; border-color: #00ff66; }
+
+        .diag-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 6px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #aaa;
         }
-        .pad-btn:active { background: #666; }
-        .val-label { font-size: 0.9rem; color: #aaa; margin: 4px 0; }
         .status { font-weight: bold; }
         .online { color: #00ff66; }
         .offline { color: #ff4444; }
-        .shake-badge {
-            display: none; background: #ff0055; color: white; text-align: center;
-            padding: 10px; font-weight: bold; border-radius: 6px; margin-top: 10px;
-            animation: pulse 0.3s infinite alternate;
-        }
+        .val { color: #fff; }
     </style>
 </head>
 <body>
 
-    <h1>MY WII REMOTE - FASE 5</h1>
+    <h1>FASE 7 — EXPERIMENTAL 6-DOF INERTIAL TRACKER</h1>
 
-    <div class="card">
-        <div>Conexão: <span id="wsStatus" class="status offline">DESCONECTADO</span></div>
-        <div>Sensores: <span id="sensorStatus" class="status offline">INATIVOS</span></div>
+    <div id="screenArea">
+        <div id="virtualCursor"></div>
     </div>
 
-    <button id="btnStartSensors" class="btn">INICIAR SENSORES</button>
-    <button id="btnCalibrate" class="btn btn-calib" style="display:none;">CALIBRAR CONTROLE</button>
-
-    <div id="shakeBadge" class="shake-badge">⚡ SHAKE DETECTED! ⚡</div>
-
-    <div class="card">
-        <h3>Processamento de Movimento</h3>
-        <div class="val-label">Estado: <span id="motionState" class="status">IDLE</span></div>
-        <div class="val-label">Magnitude: <span id="motionMag">0.00</span> m/s²</div>
+    <!-- Modos de Ponteiro -->
+    <div class="btn-group">
+        <button id="btnModeRot" class="btn btn-mode active">ROTATION POINTER</button>
+        <button id="btnMode6Dof" class="btn btn-mode">6-DOF POINTER (6D)</button>
     </div>
 
+    <button id="btnStartSensors" class="btn" style="width:100%; max-width:640px; margin-bottom:8px;">1. INICIAR SENSORES (MOBILE)</button>
+    <button id="btnCalibrate" class="btn btn-calib" style="display:none; width:100%; max-width:640px; margin-bottom:8px;">2. CALIBRAR POINTER & POSE</button>
+    
+    <!-- Drift Test Tool -->
     <div class="card">
-        <h3>Botões do Controle</h3>
-        <div class="grid">
-            <button class="pad-btn" id="btnA">A</button>
-            <button class="pad-btn" id="btnB">B</button>
-            <button class="pad-btn" id="btn1">1</button>
-            <button class="pad-btn" id="btn2">2</button>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; font-size:1rem; color:#ffaa00;">DRIFT TEST TOOL</h3>
+            <button id="btnDriftTest" class="btn btn-drift" style="width:auto; padding:6px 14px;">INICIAR TESTE (ESTÁTICO)</button>
+        </div>
+        <div style="margin-top:8px; font-family:monospace; font-size:0.85rem; color:#ddd;">
+            Tempo: <span id="driftTime" class="val">0s</span> | 
+            Drift Distância: <span id="driftDist" class="val" style="color:#ff0055;">0.000m</span><br>
+            <span style="color:#aaa;">5s: <span id="drift5s" class="val">-</span> | 10s: <span id="drift10s" class="val">-</span> | 30s: <span id="drift30s" class="val">-</span></span>
+        </div>
+    </div>
+
+    <!-- Painel de Diagnóstico 6-DOF Completo -->
+    <div class="card">
+        <h3 style="margin-top:0; font-size:0.95rem;">Painel de Diagnóstico 6-DOF</h3>
+        <div class="diag-grid">
+            <div>Tracking: <span id="trackState" class="status offline">STATIONARY</span></div>
+            <div>WS: <span id="wsStatus" class="status offline">OFFLINE</span></div>
+            <div>Calib: <span id="calibStatus" class="status offline">NÃO</span></div>
+
+            <div>Position X: <span id="posX" class="val">0.000</span>m</div>
+            <div>Position Y: <span id="posY" class="val">0.000</span>m</div>
+            <div>Position Z: <span id="posZ" class="val">0.000</span>m</div>
+
+            <div>Velocity X: <span id="velX" class="val">0.000</span>m/s</div>
+            <div>Velocity Y: <span id="velY" class="val">0.000</span>m/s</div>
+            <div>Velocity Z: <span id="velZ" class="val">0.000</span>m/s</div>
+
+            <div>WorldAccel X: <span id="accX" class="val">0.000</span></div>
+            <div>WorldAccel Y: <span id="accY" class="val">0.000</span></div>
+            <div>WorldAccel Z: <span id="accZ" class="val">0.000</span></div>
+
+            <div>Bias X: <span id="biasX" class="val">0.000</span></div>
+            <div>Bias Y: <span id="biasY" class="val">0.000</span></div>
+            <div>Bias Z: <span id="biasZ" class="val">0.000</span></div>
+
+            <div>Yaw (α): <span id="yaw" class="val">0.0</span>°</div>
+            <div>Pitch (β): <span id="pitch" class="val">0.0</span>°</div>
+            <div>Roll (γ): <span id="roll" class="val">0.0</span>°</div>
         </div>
     </div>
 
@@ -93,22 +159,49 @@
         let ws = null;
         let sensorsActive = false;
 
+        const virtualCursor = document.getElementById('virtualCursor');
+        const screenArea = document.getElementById('screenArea');
         const wsStatusEl = document.getElementById('wsStatus');
-        const sensorStatusEl = document.getElementById('sensorStatus');
+        const calibStatusEl = document.getElementById('calibStatus');
+        const trackStateEl = document.getElementById('trackState');
         const btnStartSensors = document.getElementById('btnStartSensors');
         const btnCalibrate = document.getElementById('btnCalibrate');
-        const shakeBadge = document.getElementById('shakeBadge');
+        const btnModeRot = document.getElementById('btnModeRot');
+        const btnMode6Dof = document.getElementById('btnMode6Dof');
+        const btnDriftTest = document.getElementById('btnDriftTest');
+
+        // Telemetria Diagnóstico
+        const posX = document.getElementById('posX'), posY = document.getElementById('posY'), posZ = document.getElementById('posZ');
+        const velX = document.getElementById('velX'), velY = document.getElementById('velY'), velZ = document.getElementById('velZ');
+        const accX = document.getElementById('accX'), accY = document.getElementById('accY'), accZ = document.getElementById('accZ');
+        const biasX = document.getElementById('biasX'), biasY = document.getElementById('biasY'), biasZ = document.getElementById('biasZ');
+        const yaw = document.getElementById('yaw'), pitch = document.getElementById('pitch'), roll = document.getElementById('roll');
+
+        // Ferramenta Drift Test
+        let isDriftTesting = false;
+        let driftStartPos = { x: 0, y: 0, z: 0 };
+        let driftStartTime = 0;
+        let driftTimerInterval = null;
 
         function connectWebSocket() {
             ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
-                wsStatusEl.textContent = 'CONECTADO';
+                wsStatusEl.textContent = 'ONLINE';
                 wsStatusEl.className = 'status online';
             };
 
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'STATE_UPDATE') {
+                        updatePCView(data.state);
+                    }
+                } catch(e){}
+            };
+
             ws.onclose = () => {
-                wsStatusEl.textContent = 'DESCONECTADO';
+                wsStatusEl.textContent = 'OFFLINE';
                 wsStatusEl.className = 'status offline';
                 setTimeout(connectWebSocket, 2000);
             };
@@ -116,18 +209,128 @@
 
         connectWebSocket();
 
-        btnStartSensors.addEventListener('click', async () => {
-            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-                try {
-                    const permission = await DeviceMotionEvent.requestPermission();
-                    if (permission === 'granted') {
-                        initSensors();
-                    } else {
-                        alert('Permissão negada.');
-                    }
-                } catch (error) {
-                    console.error('Erro permissão:', error);
+        function updatePCView(state) {
+            const ptr = state.pointer;
+            const pose = state.pose;
+            if (!ptr || !pose) return;
+
+            // Renderiza cursor no canvas virtual
+            const screenW = screenArea.clientWidth;
+            const screenH = screenArea.clientHeight;
+
+            const mappedX = (ptr.x / 1280) * screenW;
+            const mappedY = (ptr.y / 720) * screenH;
+
+            virtualCursor.style.left = `${mappedX}px`;
+            virtualCursor.style.top = `${mappedY}px`;
+
+            if (ptr.isCalibrated) {
+                virtualCursor.style.display = 'block';
+                calibStatusEl.textContent = 'SIM';
+                calibStatusEl.className = 'status online';
+            } else {
+                virtualCursor.style.display = 'none';
+                calibStatusEl.textContent = 'NÃO';
+                calibStatusEl.className = 'status offline';
+            }
+
+            // Diagnóstico 6-DOF
+            trackStateEl.textContent = pose.isStationary ? 'STATIONARY' : 'MOVING';
+            trackStateEl.className = pose.isStationary ? 'status offline' : 'status online';
+
+            posX.textContent = pose.position.x.toFixed(3);
+            posY.textContent = pose.position.y.toFixed(3);
+            posZ.textContent = pose.position.z.toFixed(3);
+
+            velX.textContent = pose.velocity.x.toFixed(3);
+            velY.textContent = pose.velocity.y.toFixed(3);
+            velZ.textContent = pose.velocity.z.toFixed(3);
+
+            accX.textContent = pose.worldAcceleration.x.toFixed(3);
+            accY.textContent = pose.worldAcceleration.y.toFixed(3);
+            accZ.textContent = pose.worldAcceleration.z.toFixed(3);
+
+            biasX.textContent = pose.bias.x.toFixed(3);
+            biasY.textContent = pose.bias.y.toFixed(3);
+            biasZ.textContent = pose.bias.z.toFixed(3);
+
+            yaw.textContent = pose.orientation.yaw.toFixed(1);
+            pitch.textContent = pose.orientation.pitch.toFixed(1);
+            roll.textContent = pose.orientation.roll.toFixed(1);
+
+            // Atualização do Drift Test
+            if (isDriftTesting) {
+                const dx = pose.position.x - driftStartPos.x;
+                const dy = pose.position.y - driftStartPos.y;
+                const dz = pose.position.z - driftStartPos.z;
+                const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                
+                document.getElementById('driftDist').textContent = `${dist.toFixed(4)}m`;
+
+                const elapsed = Math.floor((Date.now() - driftStartTime) / 1000);
+                document.getElementById('driftTime').textContent = `${elapsed}s`;
+
+                if (elapsed >= 5 && document.getElementById('drift5s').textContent === '-') {
+                    document.getElementById('drift5s').textContent = `${dist.toFixed(3)}m`;
                 }
+                if (elapsed >= 10 && document.getElementById('drift10s').textContent === '-') {
+                    document.getElementById('drift10s').textContent = `${dist.toFixed(3)}m`;
+                }
+                if (elapsed >= 30 && document.getElementById('drift30s').textContent === '-') {
+                    document.getElementById('drift30s').textContent = `${dist.toFixed(3)}m`;
+                }
+            }
+        }
+
+        // Seletor de Modos
+        btnModeRot.addEventListener('click', () => {
+            btnModeRot.classList.add('active');
+            btnMode6Dof.classList.remove('active');
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'SET_POINTER_MODE', mode: 'ROTATION' }));
+            }
+        });
+
+        btnMode6Dof.addEventListener('click', () => {
+            btnMode6Dof.classList.add('active');
+            btnModeRot.classList.remove('active');
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'SET_POINTER_MODE', mode: '6DOF' }));
+            }
+        });
+
+        // Drift Test Trigger
+        btnDriftTest.addEventListener('click', () => {
+            if (!isDriftTesting) {
+                isDriftTesting = true;
+                driftStartTime = Date.now();
+                btnDriftTest.textContent = 'PARAR TESTE';
+                btnDriftTest.style.background = '#ff0055';
+                btnDriftTest.style.color = 'white';
+
+                document.getElementById('drift5s').textContent = '-';
+                document.getElementById('drift10s').textContent = '-';
+                document.getElementById('drift30s').textContent = '-';
+
+                // Salva posição inicial do teste
+                const px = parseFloat(posX.textContent);
+                const py = parseFloat(posY.textContent);
+                const pz = parseFloat(posZ.textContent);
+                driftStartPos = { x: px, y: py, z: pz };
+            } else {
+                isDriftTesting = false;
+                btnDriftTest.textContent = 'INICIAR TESTE (ESTÁTICO)';
+                btnDriftTest.style.background = '#ffaa00';
+                btnDriftTest.style.color = 'black';
+            }
+        });
+
+        btnStartSensors.addEventListener('click', async () => {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission === 'granted') initSensors();
+                } catch (error) {}
             } else {
                 initSensors();
             }
@@ -135,28 +338,32 @@
 
         btnCalibrate.addEventListener('click', () => {
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'CALIBRATE' }));
-                alert('Calibração enviada ao servidor!');
+                ws.send(JSON.stringify({ type: 'CALIBRATE_POINTER' }));
             }
         });
 
         function initSensors() {
             if (sensorsActive) return;
-
+            window.addEventListener('deviceorientation', handleOrientation);
             window.addEventListener('devicemotion', handleMotion);
             sensorsActive = true;
-            sensorStatusEl.textContent = 'ATIVOS';
-            sensorStatusEl.className = 'status online';
             btnStartSensors.style.display = 'none';
             btnCalibrate.style.display = 'block';
         }
 
-        let lastShakeTime = 0;
+        let currentOrientation = { alpha: 0, beta: 0, gamma: 0 };
+        function handleOrientation(event) {
+            currentOrientation = {
+                alpha: event.alpha || 0,
+                beta: event.beta || 0,
+                gamma: event.gamma || 0
+            };
+        }
 
         function handleMotion(event) {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
-            const accel = event.accelerationIncludingGravity || { x: 0, y: 0, z: 0 };
+            const accel = event.acceleration || event.accelerationIncludingGravity || { x: 0, y: 0, z: 0 };
             const gyro = event.rotationRate || { alpha: 0, beta: 0, gamma: 0 };
 
             const payload = {
@@ -166,31 +373,12 @@
                 motion: {
                     accelerometer: { x: accel.x || 0, y: accel.y || 0, z: accel.z || 0 },
                     gyroscope: { x: gyro.beta || 0, y: gyro.gamma || 0, z: gyro.alpha || 0 },
+                    orientation: currentOrientation,
                     interval: event.interval || 0
                 }
             };
-
             ws.send(JSON.stringify(payload));
         }
-
-        function setupButton(elementId, buttonName) {
-            const btn = document.getElementById(elementId);
-            const sendEvent = (state) => {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'BUTTON', button: buttonName, state: state }));
-                }
-            };
-
-            btn.addEventListener('touchstart', (e) => { e.preventDefault(); sendEvent('pressed'); });
-            btn.addEventListener('touchend', (e) => { e.preventDefault(); sendEvent('released'); });
-            btn.addEventListener('mousedown', () => sendEvent('pressed'));
-            btn.addEventListener('mouseup', () => sendEvent('released'));
-        }
-
-        setupButton('btnA', 'A');
-        setupButton('btnB', 'B');
-        setupButton('btn1', '1');
-        setupButton('btn2', '2');
     </script>
 </body>
 </html>
