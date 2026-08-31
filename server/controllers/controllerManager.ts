@@ -1,5 +1,8 @@
-import { ButtonType, MotionMessage, ProcessedMotionData } from '../../shared/protocol';
+import { ButtonType, ProcessedMotionData, PointerState, PointerMode } from '../../shared/protocol';
+import { PoseState } from '../../shared/pose';
 import { MotionProcessor } from '../processor/MotionProcessor';
+import { PointerProcessor } from '../processor/PointerProcessor';
+import { InertialTracker } from '../tracker/InertialTracker';
 
 export interface ButtonsState {
     A: boolean; B: boolean; One: boolean; Two: boolean;
@@ -19,10 +22,14 @@ export interface ControllerState {
     buttons: ButtonsState;
     motion: MotionState;
     processedMotion: ProcessedMotionData;
+    pointer: PointerState;
+    pose: PoseState;
 }
 
 export class ControllerManager {
     private motionProcessor = new MotionProcessor();
+    private pointerProcessor = new PointerProcessor();
+    private inertialTracker = new InertialTracker();
 
     private state: ControllerState = {
         buttons: {
@@ -45,6 +52,24 @@ export class ControllerManager {
             movementState: 'IDLE',
             shakeDetected: false,
             isCalibrated: false,
+        },
+        pointer: {
+            x: 640,
+            y: 360,
+            visible: false,
+            isCalibrated: false,
+            mode: 'ROTATION',
+            rawOrientation: { alpha: 0, beta: 0, gamma: 0 },
+            calibrationOffset: { alpha: 0, beta: 0, gamma: 0 },
+        },
+        pose: {
+            position: { x: 0, y: 0, z: 0 },
+            velocity: { x: 0, y: 0, z: 0 },
+            worldAcceleration: { x: 0, y: 0, z: 0 },
+            orientation: { yaw: 0, pitch: 0, roll: 0 },
+            bias: { x: 0, y: 0, z: 0 },
+            isStationary: true,
+            timestamp: 0,
         }
     };
 
@@ -87,7 +112,6 @@ export class ControllerManager {
         if (!isValidNum(accel.x) || !isValidNum(accel.y) || !isValidNum(accel.z)) return false;
         if (!isValidNum(gyro.x) || !isValidNum(gyro.y) || !isValidNum(gyro.z)) return false;
 
-        // Atualiza Motion Bruto
         this.state.motion = {
             rawAccelerometer: { x: accel.x, y: accel.y, z: accel.z },
             rawGyroscope: { x: gyro.x, y: gyro.y, z: gyro.z },
@@ -96,14 +120,35 @@ export class ControllerManager {
             active: true,
         };
 
-        // Processa os dados através da camada isolada MotionProcessor
+        // 1. Processa aceleração e shake
         this.state.processedMotion = this.motionProcessor.process(motion, message.timestamp);
+
+        // 2. Processa rastreamento inercial (InertialTracker)
+        this.state.pose = this.inertialTracker.update(motion, message.timestamp);
+
+        // 3. Processa posição 2D do ponteiro
+        if (motion.orientation) {
+            this.state.pointer = this.pointerProcessor.process(motion.orientation, this.state.pose);
+        }
 
         return true;
     }
 
-    public calibrate(): void {
+    public setPointerMode(mode: PointerMode): void {
+        this.pointerProcessor.setMode(mode);
+        this.state.pointer.mode = mode;
+    }
+
+    public calibrateMotion(): void {
         this.motionProcessor.calibrate();
+        this.inertialTracker.reset();
+    }
+
+    public calibratePointer(): void {
+        this.inertialTracker.reset();
+        this.pointerProcessor.calibrate(undefined, this.state.pose);
+        this.state.pointer = this.pointerProcessor.getState();
+        this.state.pose = this.inertialTracker.getPose();
     }
 
     public getState(): Readonly<ControllerState> {
