@@ -30,6 +30,10 @@ export interface MotionMessage {
     motion: MotionData;
 }
 
+export interface CalibrateMessage {
+    type: 'CALIBRATE';
+}
+
 export interface PingMessage {
     type: 'PING';
 }
@@ -38,4 +42,16 @@ export interface PongMessage {
     type: 'PONG';
 }
 
-export type NetworkMessage = ButtonMessage | MotionMessage | PingMessage | PongMessage;
+export type NetworkMessage = ButtonMessage | MotionMessage | CalibrateMessage | PingMessage | PongMessage;
+
+export type MovementState = 'IDLE' | 'MOVING';
+
+export interface ProcessedMotionData {
+    linearAcceleration: Vector3;
+    filteredGyroscope: Vector3;
+    gravity: Vector3;
+    motionMagnitude: number;
+    movementState: MovementState;
+    shakeDetected: boolean;
+    isCalibrated: boolean;
+}
