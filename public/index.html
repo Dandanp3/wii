@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>My Wii Remote</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            user-select: none;
+        }
+        h1 { font-size: 1.5rem; margin-bottom: 10px; color: #00d2ff; }
+        .card {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 15px;
+            width: 100%;
+            max-width: 350px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .btn {
+            background: #00d2ff;
+            color: #000;
+            border: none;
+            padding: 15px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            width: 100%;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        .btn:active { background: #0099cc; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .pad-btn {
+            background: #444;
+            color: white;
+            border: none;
+            padding: 15px;
+            font-size: 1.1rem;
+            border-radius: 6px;
+            touch-action: manipulation;
+        }
+        .pad-btn:active { background: #666; }
+        .val-label { font-size: 0.9rem; color: #aaa; }
+        .status { font-weight: bold; }
+        .online { color: #00ff66; }
+        .offline { color: #ff4444; }
+    </style>
+</head>
+<body>
+
+    <h1>MY WII REMOTE</h1>
+
+    <div class="card">
+        <div>Conexão: <span id="wsStatus" class="status offline">DESCONECTADO</span></div>
+        <div>Sensores: <span id="sensorStatus" class="status offline">INATIVOS</span></div>
+    </div>
+
+    <button id="btnStartSensors" class="btn">INICIAR SENSORES</button>
+
+    <div class="card">
+        <h3>Acelerômetro</h3>
+        <div class="val-label">X: <span id="accX">0.00</span></div>
+        <div class="val-label">Y: <span id="accY">0.00</span></div>
+        <div class="val-label">Z: <span id="accZ">0.00</span></div>
+    </div>
+
+    <div class="card">
+        <h3>Giroscópio (Rotação)</h3>
+        <div class="val-label">X (Beta): <span id="gyroX">0.00</span></div>
+        <div class="val-label">Y (Gamma): <span id="gyroY">0.00</span></div>
+        <div class="val-label">Z (Alpha): <span id="gyroZ">0.00</span></div>
+    </div>
+
+    <!-- Interface simples de botões de toque para testar integração -->
+    <div class="card">
+        <h3>Botões do Controle</h3>
+        <div class="grid">
+            <button class="pad-btn" id="btnA">A</button>
+            <button class="pad-btn" id="btnB">B</button>
+            <button class="pad-btn" id="btn1">1</button>
+            <button class="pad-btn" id="btn2">2</button>
+        </div>
+    </div>
+
+    <script>
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}`;
+        let ws = null;
+        let sensorsActive = false;
+
+        const wsStatusEl = document.getElementById('wsStatus');
+        const sensorStatusEl = document.getElementById('sensorStatus');
+        const btnStartSensors = document.getElementById('btnStartSensors');
+
+        function connectWebSocket() {
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                wsStatusEl.textContent = 'CONECTADO';
+                wsStatusEl.className = 'status online';
+            };
+
+            ws.onclose = () => {
+                wsStatusEl.textContent = 'DESCONECTADO';
+                wsStatusEl.className = 'status offline';
+                setTimeout(connectWebSocket, 2000);
+            };
+
+            ws.onerror = (err) => console.error('Erro WS:', err);
+        }
+
+        connectWebSocket();
+
+        // Fluxo de solicitação de permissão dos sensores (iOS / Chrome modern)
+        btnStartSensors.addEventListener('click', async () => {
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceMotionEvent.requestPermission();
+                    if (permission === 'granted') {
+                        initSensors();
+                    } else {
+                        alert('Permissão para acesso aos sensores foi negada.');
+                    }
+                } catch (error) {
+                    console.error('Erro ao pedir permissão:', error);
+                }
+            } else {
+                initSensors();
+            }
+        });
+
+        function initSensors() {
+            if (sensorsActive) return;
+
+            window.addEventListener('devicemotion', handleMotion);
+            sensorsActive = true;
+            sensorStatusEl.textContent = 'ATIVOS';
+            sensorStatusEl.className = 'status online';
+            btnStartSensors.style.display = 'none';
+        }
+
+        function handleMotion(event) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+            const accel = event.accelerationIncludingGravity || event.acceleration || { x: 0, y: 0, z: 0 };
+            const gyro = event.rotationRate || { alpha: 0, beta: 0, gamma: 0 };
+
+            // Atualiza UI local
+            document.getElementById('accX').textContent = (accel.x || 0).toFixed(2);
+            document.getElementById('accY').textContent = (accel.y || 0).toFixed(2);
+            document.getElementById('accZ').textContent = (accel.z || 0).toFixed(2);
+
+            document.getElementById('gyroX').textContent = (gyro.beta || 0).toFixed(2);
+            document.getElementById('gyroY').textContent = (gyro.gamma || 0).toFixed(2);
+            document.getElementById('gyroZ').textContent = (gyro.alpha || 0).toFixed(2);
+
+            // Monta payload estrito e versionado
+            const payload = {
+                type: 'MOTION',
+                version: 1,
+                timestamp: Date.now(),
+                motion: {
+                    accelerometer: {
+                        x: accel.x || 0,
+                        y: accel.y || 0,
+                        z: accel.z || 0
+                    },
+                    gyroscope: {
+                        x: gyro.beta || 0,
+                        y: gyro.gamma || 0,
+                        z: gyro.alpha || 0
+                    },
+                    interval: event.interval || 0
+                }
+            };
+
+            ws.send(JSON.stringify(payload));
+        }
+
+        // Eventos dos botões de toque
+        function setupButton(elementId, buttonName) {
+            const btn = document.getElementById(elementId);
+            const sendEvent = (state) => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'BUTTON',
+                        button: buttonName,
+                        state: state
+                    }));
+                }
+            };
+
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); sendEvent('pressed'); });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); sendEvent('released'); });
+            btn.addEventListener('mousedown', () => sendEvent('pressed'));
+            btn.addEventListener('mouseup', () => sendEvent('released'));
+        }
+
+        setupButton('btnA', 'A');
+        setupButton('btnB', 'B');
+        setupButton('btn1', '1');
+        setupButton('btn2', '2');
+    </script>
+</body>
+</html>
