@@ -1,4 +1,5 @@
-import { ButtonType, ButtonState, MotionMessage } from '../../shared/protocol';
+import { ButtonType, MotionMessage, ProcessedMotionData } from '../../shared/protocol';
+import { MotionProcessor } from '../processor/MotionProcessor';
 
 export interface ButtonsState {
     A: boolean; B: boolean; One: boolean; Two: boolean;
@@ -7,8 +8,8 @@ export interface ButtonsState {
 }
 
 export interface MotionState {
-    accelerometer: { x: number; y: number; z: number };
-    gyroscope: { x: number; y: number; z: number };
+    rawAccelerometer: { x: number; y: number; z: number };
+    rawGyroscope: { x: number; y: number; z: number };
     timestamp: number;
     interval: number;
     active: boolean;
@@ -17,9 +18,12 @@ export interface MotionState {
 export interface ControllerState {
     buttons: ButtonsState;
     motion: MotionState;
+    processedMotion: ProcessedMotionData;
 }
 
 export class ControllerManager {
+    private motionProcessor = new MotionProcessor();
+
     private state: ControllerState = {
         buttons: {
             A: false, B: false, One: false, Two: false,
@@ -27,11 +31,20 @@ export class ControllerManager {
             Plus: false, Minus: false, Home: false,
         },
         motion: {
-            accelerometer: { x: 0, y: 0, z: 0 },
-            gyroscope: { x: 0, y: 0, z: 0 },
+            rawAccelerometer: { x: 0, y: 0, z: 0 },
+            rawGyroscope: { x: 0, y: 0, z: 0 },
             timestamp: 0,
             interval: 0,
             active: false,
+        },
+        processedMotion: {
+            linearAcceleration: { x: 0, y: 0, z: 0 },
+            filteredGyroscope: { x: 0, y: 0, z: 0 },
+            gravity: { x: 0, y: 0, z: 9.81 },
+            motionMagnitude: 0,
+            movementState: 'IDLE',
+            shakeDetected: false,
+            isCalibrated: false,
         }
     };
 
@@ -67,25 +80,30 @@ export class ControllerManager {
 
         const accel = motion.accelerometer;
         const gyro = motion.gyroscope;
-
         if (!accel || !gyro) return false;
 
-        // Validação estrita contra NaN, Infinity e não-números
         const isValidNum = (v: any) => typeof v === 'number' && Number.isFinite(v);
 
         if (!isValidNum(accel.x) || !isValidNum(accel.y) || !isValidNum(accel.z)) return false;
         if (!isValidNum(gyro.x) || !isValidNum(gyro.y) || !isValidNum(gyro.z)) return false;
 
-        // Atualização do MotionState
+        // Atualiza Motion Bruto
         this.state.motion = {
-            accelerometer: { x: accel.x, y: accel.y, z: accel.z },
-            gyroscope: { x: gyro.x, y: gyro.y, z: gyro.z },
+            rawAccelerometer: { x: accel.x, y: accel.y, z: accel.z },
+            rawGyroscope: { x: gyro.x, y: gyro.y, z: gyro.z },
             timestamp: message.timestamp,
             interval: isValidNum(motion.interval) ? motion.interval : 0,
             active: true,
         };
 
+        // Processa os dados através da camada isolada MotionProcessor
+        this.state.processedMotion = this.motionProcessor.process(motion, message.timestamp);
+
         return true;
+    }
+
+    public calibrate(): void {
+        this.motionProcessor.calibrate();
     }
 
     public getState(): Readonly<ControllerState> {
